@@ -1,43 +1,48 @@
-name: pr
+name: PR
 
 on:
   pull_request:
     branches:
-      - "main"
+      - main
 
 jobs:
-  artifact:
+  build-and-deploy:
+    runs-on: ubuntu-latest
     permissions:
       contents: write
       pull-requests: write
 
-    name: artifact
-    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      
+      - name: Checkout code
+        uses: actions/checkout@v2
+
       - name: Install Rust
         run: |
-          rustup toolchain install 1.72 \
-            --profile minimal \
-            --target wasm32-unknown-unknown \
-            --no-self-update
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+          source $HOME/.cargo/env
+          rustup default 1.72
+          rustup target add wasm32-unknown-unknown
 
       - name: Cache dependencies
-        uses: Swatinem/rust-cache@v2
+        uses: actions/cache@v2
+        with:
+          path: ~/.cargo
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
 
-      - name: Install Deps
+      - name: Install Dependencies
         run: make install-prod
 
       - name: Setup Docker Buildx
-        uses: docker/setup-buildx-action@v2
+        uses: docker/setup-buildx-action@v1
 
-      - name: Build wasm
+      - name: Build WebAssembly
         run: |
           cargo generate-lockfile
           make ci-build
 
-      - name: Pull request artifacts
+      - name: Pull Request Artifacts
         uses: gavv/pull-request-artifacts@v2
         with:
           commit: ${{ github.event.pull_request.head.sha }}
